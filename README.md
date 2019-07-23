@@ -154,3 +154,18 @@ ___If running into trouble when flashing an AK3 zip, the suffix -debugging may b
 For further support and usage examples please see the AnyKernel3 XDA thread: https://forum.xda-developers.com/showthread.php?t=2670512
 
 Have fun!
+
+## // Additional notes for Exynos 9810 ##
+
+- Universal installer zip for Samsung Exynos 9810 devices
+- Overclocking support through the appending `_overclock` or `_oc` to the end of the zip file name.
+- Underclocking support through the appending `_underclock` or `_uc` to the end of the zip file name.
+- Ability to override an existing ramdisk through appending `_clean` to the end of the zip file name.
+- `.bsdiff` files are generated through `$ bsdiff <oldfile> <newfile> <patchfile>`. For example, `$ bsdiff zImage-G960-std zImage-G960-oc zImage-G960-oc.bsdiff` generates the file `zImage-G960-oc.bsdiff` through creating a binary patchfile from the difference between `zImage-G960-std` and `zImage-G960-oc`.
+- Necessary files for the kernel are generated through `$ bspatch <oldfile> <newfile> <patchfile>`
+
+## // Additional Credits ##
+
+- [@ianmacd](https://github.com/ianmacd/) for his previous work on APGK's installer and inherently inspiring many unique features &modifications.
+- [@yarpiin](https://github.com/yarpiin/) for his initial work on AnyKernel3 and inspiring several unique ideas.
+- [@djb77](https://github.com/djb77/) for his modifications that allows the kernel to be compatible with any security patch.

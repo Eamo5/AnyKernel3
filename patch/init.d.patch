@@ -1,0 +1,19 @@
+--- init.rc	2019-07-22 21:27:18.620214628 +1000
++++ init.rc	2019-07-22 21:29:35.706635025 +1000
+@@ -1905,3 +1905,16 @@
+ # package_fw
+ on property:sys.do_restorecon_user=*
+     restorecon --recursive --force /data/media/${sys.do_restorecon_user}
++
++# Added init.d support
++
++on property:sys.boot_completed=1
++     start sysinit
++
++service sysinit /sbin/sysinit.sh
++     
++	 class late_start
++     user root
++     seclabel u:r:init:s0
++     oneshot
++	 disabled

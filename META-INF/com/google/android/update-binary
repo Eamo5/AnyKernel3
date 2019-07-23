@@ -61,6 +61,31 @@ abort() {
   unmount_all;
   exit 1;
 }
+bspatch_g965() {
+  if [ -f $home/boot/zImage-G965-std.bsdiff ] && [ -f $home/boot/img-G965-std.dtb.bsdiff ]; then
+    ui_print "Patching kernel for $device";
+    $bspatch $home/boot/zImage-G960-std $home/boot/zImage-G965-std $home/boot/zImage-G965-std.bsdiff;
+    $bspatch $home/boot/img-G960-std.dtb $home/boot/img-G965-std.dtb $home/boot/img-G965-std.dtb.bsdiff;
+  else
+    abort "Fatal error! Could not construct $device kernel!";
+  fi;
+}
+ramdisk_warning() {
+  ui_print "Warning! Could not flash stock $device ramdisk";
+}
+oc_unsupported() {
+  abort "$device kernel doesn't appear to support overclocking!";
+}
+uc_unsupported() {
+  abort "$device kernel doesn't appear to support underclocking!";
+}
+no_kernel_found() {
+  abort "Fatal error! $device kernel doesn't exist!"
+}
+
+bspatch=$home/tools/bspatch;
+chmod 755 $bspatch;
+$bspatch >/dev/null 2>&1;
 
 show_progress 1.34 4;
 ui_print " ";
@@ -141,9 +166,10 @@ if [ "$(file_getprop anykernel.sh do.devicecheck)" == 1 ]; then
   ui_print "Checking device...";
   device=$(getprop ro.product.device);
   product=$(getprop ro.build.product);
+  bl=$(getprop ro.boot.bootloader);
+  fw=${bl:9:4};
   for testname in $(file_getprop anykernel.sh 'device.name.*'); do
     if [ "$device" == "$testname" -o "$product" == "$testname" ]; then
-      ui_print "$testname" " ";
       match=1;
       break;
     fi;
@@ -151,6 +177,132 @@ if [ "$(file_getprop anykernel.sh do.devicecheck)" == 1 ]; then
   if [ ! "$match" ]; then
     abort " " "Unsupported device. Aborting...";
   fi;
+fi;
+
+ui_print "Detected a $device device on $fw firmware.";
+
+# Read kernel choice from archive name, if applicable.
+
+zipname=${ZIPFILE##*/};
+[ $zipname != ${zipname/_underclock//} ] && underclock=true;
+[ $zipname != ${zipname/_uc//} ] && underclock=true;
+[ $zipname != ${zipname/_overclock//} ] && overclock=true;
+[ $zipname != ${zipname/_oc//} ] && overclock=true;
+[ $zipname != ${zipname/_clean//} ] && clean=true;
+
+# Otherwise, check for dotfiles to determine kernel choice.
+
+[ -f /external_sd/.underclock ] && underclock=true;
+[ -f /external_sd/.uc ] && underclock=true;
+[ -f /external_sd/.overclock ] && overclock=true;
+[ -f /external_sd/.oc ] && overclock=true;
+[ -f /external_sd/.clean ] && clean=true;
+
+if [ "$(file_getprop anykernel.sh do.devicecheck)" == 1 ]; then
+  if [ "$clean" == true ]; then
+    ui_print "Replacing ramdisk...";
+    ui_print "WARNING: This may cause issues if you are flashing the kernel on an incompatible base!";
+    case $device in
+      starlte)
+        if [ -f $home/boot/G960.img ]; then
+          $bb cat $home/boot/G960.img > /dev/block/platform/11120000.ufs/by-name/BOOT;
+        else
+          ramdisk_warning;
+        fi;;
+      star2lte)
+        if [ -f $home/boot/G960.img ] && [ -f $home/boot/G965.img.bsdiff ]; then
+          $bspatch  $home/boot/G960.img $home/G965.img $home/boot/G965.img.bsdiff;
+          $bb cat $home/G965.img > /dev/block/platform/11120000.ufs/by-name/BOOT;
+        else
+          ramdisk_warning;
+        fi;;
+      crownlte)
+        if [ -f $home/boot/G960.img ] && [ -f $home/boot/N960.img.bsdiff ]; then
+          $bspatch  $home/boot/G960.img $home/N960.img $home/boot/N960.img.bsdiff;
+          $bb cat $home/N960.img > /dev/block/platform/11120000.ufs/by-name/BOOT;
+        else
+          ramdisk_warning;
+        fi;;
+    esac;
+  fi;
+
+  case $device in
+    starlte)
+      if [ "$overclock" != true ] && [ "$underclock" != true ]; then
+        if [ -f $home/boot/zImage-G960-std ] && [ -f $home/boot/img-G960-std.dtb ]; then
+          $bb mv $home/boot/zImage-G960-std $home/zImage;
+          $bb mv $home/boot/img-G960-std.dtb $home/img.dtb;
+        else
+          no_kernel_found;
+        fi;
+      elif [ "$overclock" == true ]; then
+        ui_print "Patching $device kernel for overclock...";
+        if [ -f $home/boot/zImage-G960-oc.bsdiff ] && [ -f $home/boot/img-G960-oc.dtb.bsdiff ]; then
+          $bspatch $home/boot/zImage-G960-std $home/zImage $home/boot/zImage-G960-oc.bsdiff;
+          $bspatch $home/boot/img-G960-std.dtb $home/img.dtb $home/boot/img-G960-oc.dtb.bsdiff;
+        else
+          oc_unsupported;
+        fi;
+      elif [ "$underclock" == true ]; then
+        ui_print "Patching $device kernel for underclock...";
+        if [ -f $home/boot/zImage-G960-uc.bsdiff ] && [ -f $home/boot/img-G960-uc.dtb.bsdiff ]; then
+          $bspatch $home/boot/zImage-G960-std $home/zImage $home/boot/zImage-G960-uc.bsdiff;
+          $bspatch $home/boot/img-G960-std.dtb $home/img.dtb $home/boot/img-G960-uc.dtb.bsdiff;
+        else
+          uc_unsupported;
+        fi;
+      fi;;
+    star2lte)
+      bspatch_g965;
+      if [ "$overclock" != true ] && [ "$underclock" != true ]; then
+        if [ -f $home/boot/zImage-G965-std ] && [ -f $home/boot/img-G965-std.dtb ]; then
+          $bb mv $home/boot/zImage-G965-std $home/zImage;
+          $bb mv $home/boot/img-G965-std.dtb $home/img.dtb;
+        else
+          no_kernel_found;
+        fi;
+      elif [ "$overclock" == true ]; then
+        if [ -f $home/boot/zImage-G965-oc.bsdiff ] && [ -f $home/boot/img-G965-oc.dtb.bsdiff ]; then
+          ui_print "Patching $device kernel for overclock...";
+          $bspatch $home/boot/zImage-G965-std $home/zImage $home/boot/zImage-G965-oc.bsdiff;
+          $bspatch $home/boot/img-G965-std.dtb $home/img.dtb $home/boot/img-oc.dtb.bsdiff;
+        else
+          oc_unsupported;
+        fi;
+      elif [ "$underclock" == true ]; then
+        if [ -f $home/boot/zImage-G965-uc.bsdiff ] && [ -f $home/boot/img-G965-uc.dtb.bsdiff ]; then
+          ui_print "Patching $device kernel for underclock...";
+          $bspatch $home/boot/zImage-G965-std $home/zImage $home/boot/zImage-G965-uc.bsdiff;
+          $bspatch $home/boot/img-G965-std.dtb $home/img.dtb $home/boot/img-G965-uc.dtb.bsdiff;
+        else
+          uc_unsupported;
+        fi;
+      fi;;
+    crownlte)
+      if [ "$overclock" != true ] && [ "$underclock" != true ]; then
+        if [ -f $home/boot/zImage-N960-std ] && [ -f $home/boot/img-N960-std.dtb ]; then
+          $bb mv $home/boot/zImage-N960-std $home/zImage;
+          $bb mv $home/boot/img-N960-std.dtb $home/img.dtb;
+        else
+          no_kernel_found;
+        fi;
+      elif [ "$overclock" == true ]; then
+        ui_print "Patching $device kernel for overclock...";
+        if [ -f $home/boot/zImage-N960-oc.bsdiff ] && [ -f $home/boot/img-N960-oc.dtb.bsdiff ]; then
+          $bspatch $home/boot/zImage-N960-std $home/zImage $home/boot/zImage-N960-oc.bsdiff;
+          $bspatch $home/boot/img-N960-std.dtb $home/img.dtb $home/boot/img-N960-oc.dtb.bsdiff;
+        else
+          oc_unsupported;
+        fi;
+      elif [ "$underclock" == true ]; then
+        if [ -f $home/boot/zImage-N960-uc.bsdiff ] && [ -f $home/boot/img-N960-uc.dtb.bsdiff ]; then
+          $bspatch $home/boot/zImage-N960-std $home/zImage $home/boot/zImage-N960-uc.bsdiff;
+          $bspatch $home/boot/img-N960-std.dtb $home/img.dtb $home/boot/img-N960-uc.dtb.bsdiff;
+        else
+          uc_unsupported;
+        fi;
+      fi;;
+  esac;
 fi;
 
 supported_ver=$(file_getprop anykernel.sh supported.versions | $bb tr -d '[:space:]');

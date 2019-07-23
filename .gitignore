@@ -1,0 +1,5 @@
+*.dtb
+*zImage*
+*.zip
+*.bsdiff
+*.img
